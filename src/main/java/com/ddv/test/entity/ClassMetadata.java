@@ -3,6 +3,7 @@ package com.ddv.test.entity;
 import java.util.ArrayList;
 
 import com.ddv.test.SQLInsertBuilder;
+import com.ddv.test.Tapestry;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.body.CallableDeclaration.Signature;
 import com.github.javaparser.ast.expr.SimpleName;
@@ -17,12 +18,14 @@ public class ClassMetadata implements IMetadata {
 	private ClassMetadata extendedClass;
 	private boolean isAbstract;
 	private boolean isStatic;
+	private boolean isEnum;
 	private ClassMetadata outerClass;
 	private ArrayList<MethodMetadata> methods;
 	private ArrayList<ConstructorMetadata> constructors;
 	private ArrayList<ClassMetadata> implementedInterfaces;
 	private ArrayList<String> genericTypes;
 	private boolean isEntityBean;
+	private Integer referencedComponentCount;
 	
 	public ClassMetadata(int anId, String aName, PackageMetadata aPackage) {
 		id = anId;
@@ -82,6 +85,13 @@ public class ClassMetadata implements IMetadata {
 		return isAbstract;
 	}
 	
+	public void setIsEnum(boolean aFlag) {
+		isEnum = aFlag;
+	}
+	public boolean isEnum(boolean aFlag) {
+		return isEnum;
+	}
+	
 	public void addImplementedInterfaces(ClassMetadata anInterface) {
 		implementedInterfaces.add(anInterface);
 	}
@@ -131,9 +141,29 @@ public class ClassMetadata implements IMetadata {
 		return ((packageMetaData!=null) ? (packageMetaData.getPackageFullName() + ".") : "") + name;
 	}
 	
+	public void postProcessComponents(Tapestry aTapestry, MetadataFactory aMetadataFactory) {
+		for (MethodMetadata methodMetadata : methods) {
+			methodMetadata.postProcessComponents(this, aTapestry, aMetadataFactory);
+		}
+	}
+	
+	public int resolveReferencedComponentCount() {
+		if (referencedComponentCount==null) {
+			int rslt = 0;
+			for (MethodMetadata methodMetadata : methods) {
+				rslt += methodMetadata.getComponentMetadata().resolveReferencedComponentCount();
+			}
+			if (extendedClass!=null) {
+				rslt =+ extendedClass.resolveReferencedComponentCount();
+			}
+			referencedComponentCount = rslt;
+		}
+		return referencedComponentCount.intValue();
+	}
+	
 	@Override
 	public String toString() {
-		String rslt =  "Class " + getClassFullName(); 
+		String rslt = ((isEnum) ? "Enum " : "Class ") + getClassFullName(); 
 	
 		if ((genericTypes!=null) && (!genericTypes.isEmpty())) {
 			for (String genericType : genericTypes) {
@@ -178,6 +208,17 @@ public class ClassMetadata implements IMetadata {
 	public String generateSQLInsert() {
 		StringBuilder rslt = new StringBuilder();
 		
+		new SQLInsertBuilder(rslt, "CLASS", "ID", "NAME", "FULL_PCK_NAME", "DECLARED_INSTRUCTION_COUNT", "INSTRUCTION_COUNT", "IS_STATIC", "IS_ABSTRACT", "IS_ENUM")
+			.addNumber(id)
+			.addString(name)
+			.addString(packageMetaData.getPackageFullName())
+			.addNumber(getDeclaredInstructionCount())
+			.addNumber(getInstructionCount())
+			.addBoolean(isStatic)
+			.addBoolean(isAbstract)
+			.addBoolean(isEnum)
+			.flush();
+		
 		ArrayList<PackageMetadata> packages = packageMetaData.getAllPackagesToRoot();
 		for (PackageMetadata packageMetadata : packages) {
 			new SQLInsertBuilder(rslt, "CLASS_PACKAGE", "CLASS_ID", "PACKAGE_ID")
@@ -201,14 +242,6 @@ public class ClassMetadata implements IMetadata {
 					.flush();
 			}
 		}
-		
-		new SQLInsertBuilder(rslt, "CLASS", "ID", "NAME", "FULL_PCK_NAME", "DECLARED_INSTRUCTION_COUNT", "INSTRUCTION_COUNT")
-			.addNumber(id)
-			.addString(name)
-			.addString(packageMetaData.getPackageFullName())
-			.addNumber(getDeclaredInstructionCount())
-			.addNumber(getInstructionCount())
-			.flush();
 
 		for (ConstructorMetadata constructor: constructors) {
 			new SQLInsertBuilder(rslt, "CONSTRUCTOR", "ID", "CLASS_ID", "SIGNATURE", "DECLARED_INSTRUCTION_COUNT")

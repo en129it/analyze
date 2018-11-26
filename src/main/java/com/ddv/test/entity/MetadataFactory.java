@@ -1,22 +1,33 @@
 package com.ddv.test.entity;
 
+import java.io.BufferedOutputStream;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Optional;
 
 import com.ddv.test.MethodMetrics;
+import com.ddv.test.Tapestry;
+import com.ddv.test.Utils;
+import com.ddv.test.exception.UnknownObjectException;
 import com.github.javaparser.ast.expr.Name;
 import com.google.common.base.Objects;
+import com.google.common.io.Files;
 
 public class MetadataFactory {
 
 	private ArrayList<Name> javaFiles = new ArrayList<Name>();
+	private Tapestry tapestry;
 	private ArrayList<ClassMetadata> classes = new ArrayList<ClassMetadata>();
 	private ArrayList<PackageMetadata> packages = new ArrayList<PackageMetadata>();
 	private int idGenerator;
 	
 
-	public MetadataFactory(ArrayList<Path> aJavaFiles) {
+	public MetadataFactory(ArrayList<Path> aJavaFiles, Tapestry aTapestry) {
 		for (Path javaFile : aJavaFiles) {
 			boolean isInPackage = false;
 			boolean mustSkip = false;
@@ -42,6 +53,20 @@ public class MetadataFactory {
 				javaFiles.add(name);
 			}
 		}
+		
+		tapestry = aTapestry;
+	}
+	
+	public void postProcess() {
+		tapestry.postProcess(this);
+		
+		for (ClassMetadata classMetadata : classes) {
+			classMetadata.postProcessComponents(tapestry,  this);
+		}
+		
+		for (ClassMetadata classMetadata : classes) {
+			classMetadata.resolveReferencedComponentCount();
+		}
 	}
 	
 	public boolean existsJavaFile(Name aQualifiedJavaClass) {
@@ -60,6 +85,41 @@ public class MetadataFactory {
 		return rslt;
 	}
 	
+	public ArrayList<Name> findJavaFilesEndingWith(Name aPartialQualifiedJavaClass) {
+		ArrayList<String> reversePathParts = new ArrayList<String>();
+		Name ref = aPartialQualifiedJavaClass;
+		while (ref!=null) {
+			reversePathParts.add(ref.getIdentifier());
+			if (ref.getQualifier().isPresent()) {
+				ref = ref.getQualifier().get();
+			}
+		}
+		
+		ArrayList<Name> rslt = new ArrayList<Name>(1);
+		
+		boolean match;
+		for (Name javaFile : javaFiles) {
+			ref = javaFile;
+			match = true;
+			for (String pathPart : reversePathParts) {
+				if ((ref!=null) && (pathPart.equals(ref.getIdentifier()))) {
+					if (ref.getQualifier().isPresent()) {
+						ref = ref.getQualifier().get();
+					}
+				} else {
+					match = false;
+					break;
+				}
+			}
+			
+			if (match) {
+				rslt.add(javaFile);
+			}
+		}
+		
+		return rslt;
+	}
+	
 	public ClassMetadata createClass(Name aClassName) {
 		PackageMetadata packageMetadata = null;
 		Optional<Name> optionalQualifier = aClassName.getQualifier();
@@ -70,16 +130,35 @@ public class MetadataFactory {
 	}
 	
 	public ClassMetadata createClass(String aClassName, PackageMetadata aPackage, ClassMetadata anOuterClass) {
-		for (ClassMetadata classMetadata : classes) {
-			if (classMetadata.equals(aClassName, aPackage)) {
-				return classMetadata;
-			}
+		try {
+			return getClass(aClassName, aPackage);
+		} catch (UnknownObjectException ex) {
 		}
 		
 		ClassMetadata rslt = (anOuterClass==null) ? new ClassMetadata(idGenerator++, aClassName, aPackage) : new ClassMetadata(idGenerator++, aClassName, aPackage, anOuterClass);
 		classes.add(rslt);
 //		System.out.println("#### Create class (name=" + rslt.getClassFullName() + ")");
 		return rslt;
+	}
+
+	public ClassMetadata getClass(String aQualifiedName) {
+		Name className = Utils.convertToName(aQualifiedName);
+		
+		PackageMetadata packageMetadata = null;
+		Optional<Name> optionalQualifier = className.getQualifier();
+		if (optionalQualifier.isPresent()) {
+			packageMetadata = createPackage(optionalQualifier.get());
+		}
+		return getClass(className.getIdentifier(), packageMetadata);
+	}
+	
+	public ClassMetadata getClass(String aClassName, PackageMetadata aPackage) {
+		for (ClassMetadata classMetadata : classes) {
+			if (classMetadata.equals(aClassName, aPackage)) {
+				return classMetadata;
+			}
+		}
+		throw new UnknownObjectException("Unable to find class '" + aPackage.getPackageFullName() + "." + aClassName + "'");
 	}
 	
 	public PackageMetadata createPackage(Name aName) {
@@ -144,6 +223,22 @@ public class MetadataFactory {
 		}
 	}
 
+	public void generateSQL(String anOutFileName) throws IOException {
+		try (BufferedWriter out = new BufferedWriter(new FileWriter(new File(anOutFileName)))) {
+			for (PackageMetadata packageMetadata : packages) {
+				packageMetadata.walkTree( (PackageMetadata metadata) -> {
+					try { 
+						out.write(metadata.generateSQLInsert());
+					} catch (IOException ex) {
+					}
+				});
+			}
+			for (ClassMetadata classMetadata : classes) {
+				out.write(classMetadata.generateSQLInsert());
+			}
+		}
+	}
+	
 	public void printOutClasses() {
 		for (ClassMetadata classMetadata : classes) {
 			System.out.println(classMetadata.toString());

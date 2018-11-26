@@ -60,19 +60,43 @@ public class CodeAnalyzer {
 	}
 	
 	public static void main(String[] args) throws Exception {
-		CodeAnalyzer t = new CodeAnalyzer();
-		ArrayList<Path> javaFiles = t.findJavaFiles(new String[]{"C:/Users/ddev/workspacemars2/CodeAnalyzer/src/main/java/com/ddv/test"});
-		System.out.println(">>>> " + javaFiles.size());
-		MetadataFactory factory = new MetadataFactory(javaFiles);
-		for (Path javaFile : javaFiles) {
-			t.analyzeFile(javaFile, factory);
-		}
-		factory.printOutClasses();
-	}
-	
-	public static class MyInner implements Serializable {
-		public void sayHello() {
-			System.out.println("Hello");
+		if (args.length<3) {
+			System.out.println("Usage: CodeAnalyzer <contrib file> <out file> [<folders to analyze>]");
+		} else {
+			String contribFile = args[0];
+			String outFile = args[1];
+			
+			String[] foldersToAnalyze = new String[args.length-2];
+			System.arraycopy(args, 2, foldersToAnalyze, 0, foldersToAnalyze.length);
+
+			System.out.println("Start parsing contrib library file...");
+			Tapestry tapestry = new Tapestry();
+			tapestry.addContribLibrary("RDIS", contribFile);
+			System.out.println("Contrib library file parsing done");
+			
+			CodeAnalyzer t = new CodeAnalyzer();
+			ArrayList<Path> javaFiles = t.findJavaFiles(foldersToAnalyze);
+			int javaFileCount = javaFiles.size();
+			System.out.println(String.format("Start analyzing %d Java files...", javaFileCount));
+			MetadataFactory factory = new MetadataFactory(javaFiles, tapestry);
+			
+			int tickSize = Math.max(1, (javaFileCount * 10) / 100);
+			int processedFileCount = 0;
+
+			System.out.print("Progress : ");
+			for (Path javaFile : javaFiles) {
+				t.analyzeFile(javaFile, factory);
+				processedFileCount++;
+				if ((processedFileCount % tickSize)==0) {
+					System.out.print(".");
+				}
+			}
+			System.out.println();
+			System.out.println("Analysis done. Start post processing...");
+			factory.postProcess();
+			System.out.println("Post processing done. Saving results to " + outFile);
+			factory.generateSQL(outFile);
+			//factory.printOutClasses();
 		}
 	}
 }

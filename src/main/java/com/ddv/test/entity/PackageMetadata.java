@@ -1,6 +1,7 @@
 package com.ddv.test.entity;
 
 import java.util.ArrayList;
+import java.util.function.Consumer;
 
 import com.ddv.test.SQLInsertBuilder;
 import com.github.javaparser.ast.expr.Name;
@@ -57,6 +58,13 @@ public class PackageMetadata implements IMetadata {
 		aRslt.add(0, this);
 		if (parent!=null) {
 			parent.getAllPackagesToRootHelper(aRslt);
+		}
+	}
+	
+	public void walkTree(Consumer<PackageMetadata> aConsumer) {
+		aConsumer.accept(this);
+		for (PackageMetadata child : children) {
+			child.walkTree(aConsumer);
 		}
 	}
 	

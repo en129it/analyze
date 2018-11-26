@@ -5,6 +5,7 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 
 import com.ddv.test.MethodMetrics;
+import com.ddv.test.Tapestry;
 
 public class MethodMetadata implements IMetadata {
 
@@ -14,6 +15,7 @@ public class MethodMetadata implements IMetadata {
 	private String methodReturnType;
 	private MethodMetrics metrics;
 	private String componentAnnotationValue;
+	private ComponentMetadata componentMetadata;
 	
 	public MethodMetadata(int anId, String aName, ArrayList<String> aMethodArgs, String aMethodReturnType, MethodMetrics aMetrics) {
 		id = anId;
@@ -30,6 +32,10 @@ public class MethodMetadata implements IMetadata {
 		return componentAnnotationValue;
 	}
 	
+	public ComponentMetadata getComponentMetadata() {
+		return componentMetadata;
+	}
+	
 	public boolean hasSameSignature(MethodMetadata aMethod) {
 		return Objects.equals(aMethod.name, name)
 			&& Objects.equals(aMethod.methodArgs, methodArgs)
@@ -42,6 +48,10 @@ public class MethodMetadata implements IMetadata {
 	
 	public int getDeclaredBranchCount() {
 		return metrics.branchCount;
+	}
+
+	public void postProcessComponents(ClassMetadata aContext, Tapestry aTapestry, MetadataFactory aMetadataFactory) {
+		componentMetadata = aTapestry.resolveComponentName(aContext, componentAnnotationValue);
 	}
 	
 	@Override

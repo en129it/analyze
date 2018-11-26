@@ -30,6 +30,10 @@ public class SQLInsertBuilder {
 		return addHelper(Integer.toString(aValue));
 	}
 	
+	public SQLInsertBuilder addBoolean(boolean aFlag) {
+		return addHelper("'" + (aFlag ? "Y" : "N") + "'");
+	}
+	
 	private SQLInsertBuilder addHelper(String aValue) {
 		if (isFirst) {
 			isFirst = false;

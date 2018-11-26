@@ -18,6 +18,7 @@ import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
+import com.github.javaparser.ast.body.EnumDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.expr.AnnotationExpr;
@@ -133,6 +134,27 @@ public class ClassVisitor extends VoidVisitorAdapter<Void> {
 	}
 	
 	@Override
+	public void visit(EnumDeclaration n, Void arg) {
+		ClassMetadata classMetadata = null;
+		if (n.isTopLevelType()) {
+			classMetadata = factory.createClass(n.getNameAsString(), packageMetadata, null);
+			if (outerClass==null) {
+				outerClass = classMetadata;
+			} else {
+				throw new ParsingException("Error during parsing of class '" + n.getNameAsString() + "' : class is supposed to be the top level class in its file but class '" + outerClass.getClassFullName() + "' is already considered as the top level class");
+			}
+		} else {
+			if (outerClass!=null) {
+				classMetadata = factory.createClass(n.getNameAsString(), packageMetadata, outerClass);
+			} else {
+				throw new ParsingException("Error during parsing of class '" + n.getNameAsString() + "' : class is supposed to be an inner class but the outer class cannot be found");
+			}
+		}
+		classMetadata.setIsEnum(true);
+		classMetadata.setIsStatic(n.isStatic());
+	}
+	
+	@Override
 	public void visit(ClassOrInterfaceDeclaration n, Void arg) {
 		// Create class itself
 		ClassMetadata classMetadata = null;
@@ -234,7 +256,7 @@ public class ClassVisitor extends VoidVisitorAdapter<Void> {
 			} else if (componentAnnotationExpr instanceof NormalAnnotationExpr) {
 				NodeList<MemberValuePair> members = ((NormalAnnotationExpr)componentAnnotationExpr).getPairs();
 				for (int i=0; i<members.size(); i++) {
-					if ("value".equals(members.get(i).getNameAsString())) {
+					if ("type".equals(members.get(i).getNameAsString())) {
 						annotationValue = members.get(i).getValue().toString();
 						break;
 					}
