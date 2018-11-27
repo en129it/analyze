@@ -4,6 +4,8 @@ import java.util.ArrayList;
 
 import com.ddv.test.SQLInsertBuilder;
 import com.ddv.test.Tapestry;
+import com.ddv.test.Utils;
+import com.ddv.test.exception.UnknownObjectException;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.body.CallableDeclaration.Signature;
 import com.github.javaparser.ast.expr.SimpleName;
@@ -137,6 +139,24 @@ public class ClassMetadata implements IMetadata {
 		return rslt;
 	}
 	
+	public int getDeclaredComponentCount() {
+		int rslt = 0;
+		for (MethodMetadata method : methods) {
+			if (method.getComponentMetadata()!=null) {
+				rslt++;
+			}
+		}
+		return rslt;
+	}
+	
+	public int getComponentCount() {
+		int rslt = getDeclaredComponentCount();
+		if (extendedClass!=null) {
+			rslt += extendedClass.getComponentCount();
+		}
+		return rslt;
+	}
+	
 	public String getClassFullName() {
 		return ((packageMetaData!=null) ? (packageMetaData.getPackageFullName() + ".") : "") + name;
 	}
@@ -145,6 +165,25 @@ public class ClassMetadata implements IMetadata {
 		for (MethodMetadata methodMetadata : methods) {
 			methodMetadata.postProcessComponents(this, aTapestry, aMetadataFactory);
 		}
+	}
+	
+	public String resolveComponentCopyOf(String aMethodName) {
+		String methodName = Utils.createGetterMethod(aMethodName);
+		MethodMetadata methodMetadata = findAbstractMethodByName(methodName);
+		if (methodMetadata!=null) {
+			return methodMetadata.resolveComponentName(this);
+		} else {
+			throw new UnknownObjectException("Unable to find abstract method '" + methodName + "' on class '" + getClassFullName() + "'");
+		}
+	}
+	
+	public MethodMetadata findAbstractMethodByName(String aMethodName) {
+		for (MethodMetadata methodMetadata : methods) {
+			if ((methodMetadata.isAbstract()) && (aMethodName.equals(methodMetadata.getMethodName()))) {
+				return methodMetadata;
+			}
+		}
+		return null;
 	}
 	
 	public int resolveReferencedComponentCount() {
@@ -208,12 +247,14 @@ public class ClassMetadata implements IMetadata {
 	public String generateSQLInsert() {
 		StringBuilder rslt = new StringBuilder();
 		
-		new SQLInsertBuilder(rslt, "CLASS", "ID", "NAME", "FULL_PCK_NAME", "DECLARED_INSTRUCTION_COUNT", "INSTRUCTION_COUNT", "IS_STATIC", "IS_ABSTRACT", "IS_ENUM")
+		new SQLInsertBuilder(rslt, "CLASS", "ID", "NAME", "FULL_PCK_NAME", "DECLARED_INSTRUCTION_COUNT", "INSTRUCTION_COUNT", "DECLARED_COMPONENT_COUNT", "COMPONENT_COUNT", "IS_STATIC", "IS_ABSTRACT", "IS_ENUM")
 			.addNumber(id)
 			.addString(name)
 			.addString(packageMetaData.getPackageFullName())
 			.addNumber(getDeclaredInstructionCount())
 			.addNumber(getInstructionCount())
+			.addNumber(getDeclaredComponentCount())
+			.addNumber(getComponentCount())
 			.addBoolean(isStatic)
 			.addBoolean(isAbstract)
 			.addBoolean(isEnum)
@@ -253,13 +294,22 @@ public class ClassMetadata implements IMetadata {
 		}
 
 		for (MethodMetadata method: methods) {
-			new SQLInsertBuilder(rslt, "METHOD", "ID", "CLASS_ID", "SIGNATURE", "DECLARED_INSTRUCTION_COUNT", "COMPONENT_ANNOTATION_VALUE")
+			ComponentMetadata componentMetadata = method.getComponentMetadata();
+			SQLInsertBuilder builder = null;
+			if (componentMetadata!=null) {
+				builder = new SQLInsertBuilder(rslt, "METHOD", "ID", "CLASS_ID", "SIGNATURE", "DECLARED_INSTRUCTION_COUNT", "COMPONENT_ID");
+			} else {
+				builder = new SQLInsertBuilder(rslt, "METHOD", "ID", "CLASS_ID", "SIGNATURE", "DECLARED_INSTRUCTION_COUNT");
+			}
+			builder
 			.addNumber(method.getId())
 			.addNumber(id)
-			.addString("")
-			.addNumber(method.getDeclaredInstructionCount())
-			.addString(method.getComponentAnnotationValue()!=null ? method.getComponentAnnotationValue() : "")
-			.flush();
+			.addString(method.getMethodName())
+			.addNumber(method.getDeclaredInstructionCount());
+			if (componentMetadata!=null) {
+				builder.addNumber(componentMetadata.getId());
+			}
+			builder.flush();
 		}
 		
 		return rslt.toString();

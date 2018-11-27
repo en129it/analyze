@@ -44,4 +44,10 @@ public class Utils {
 		}
 		return (scopeRslt==null) ? new Name(aType.getNameAsString()) : new Name(scopeRslt, aType.getNameAsString());
 	}
+	
+	public static String createGetterMethod(String aPropertyName) {
+		return "get" + ((aPropertyName.length()>1)
+			? (Character.toUpperCase(aPropertyName.charAt(0)) + aPropertyName.substring(1))
+			: ("get" + aPropertyName.toUpperCase()));
+	}
 }

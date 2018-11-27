@@ -225,7 +225,7 @@ public class ClassVisitor extends VoidVisitorAdapter<Void> {
 
 		MethodMetrics metrics = new MethodMetrics();
 		aMethodDeclaration.accept(new MethodVisitor(metrics), null);
-		MethodMetadata methodMetadata = factory.createMethod(currentParsedClass, aMethodDeclaration.getNameAsString(), argTypeNames, returnTypeName, metrics);
+		MethodMetadata methodMetadata = factory.createMethod(currentParsedClass, aMethodDeclaration.getNameAsString(), argTypeNames, returnTypeName, aMethodDeclaration.isAbstract(), metrics);
 		
 		processComponentAnnotation(aMethodDeclaration, methodMetadata);
 	}
@@ -250,14 +250,24 @@ public class ClassVisitor extends VoidVisitorAdapter<Void> {
 		if (componentAnnotation.isPresent()) {
 			AnnotationExpr componentAnnotationExpr = componentAnnotation.get();
 			
-			String annotationValue = null;
+			String annotationValue = null; boolean isType = false;
 			if (componentAnnotationExpr instanceof SingleMemberAnnotationExpr) {
+				// Case : @Component("value")
 				annotationValue = ((SingleMemberAnnotationExpr)componentAnnotationExpr).getMemberValue().toString();
 			} else if (componentAnnotationExpr instanceof NormalAnnotationExpr) {
+				// Case : @Component(aaa="123", bbb="456")
 				NodeList<MemberValuePair> members = ((NormalAnnotationExpr)componentAnnotationExpr).getPairs();
+				MemberValuePair pair = null; String pairKey = null;
 				for (int i=0; i<members.size(); i++) {
-					if ("type".equals(members.get(i).getNameAsString())) {
-						annotationValue = members.get(i).getValue().toString();
+					pair = members.get(i);
+					pairKey = pair.getNameAsString();
+					if ("type".equals(pairKey)) {
+						annotationValue = pair.getValue().toString();
+						isType = true;
+						break;
+					} else if ("copyOf".equals(pairKey)) {
+						annotationValue = pair.getValue().toString();
+						isType = false;
 						break;
 					}
 				}
@@ -267,7 +277,7 @@ public class ClassVisitor extends VoidVisitorAdapter<Void> {
 				if (annotationValue.startsWith("\"") && annotationValue.endsWith("\"")) {
 					annotationValue = annotationValue.substring(1,  annotationValue.length()-1);
 				}
-				aMethodMetadata.setComponentAnnotationValue(annotationValue);
+				aMethodMetadata.setComponentAnnotationValue(annotationValue, isType);
 			} else {
 				throw new UnknownObjectException("Unable to process @Component annotation on method '" + aMethodDeclaration.getNameAsString() + "' of class '" + currentParsedClass.getClassFullName() + "'");
 			}

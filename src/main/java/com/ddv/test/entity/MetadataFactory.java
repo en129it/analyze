@@ -196,8 +196,8 @@ public class MetadataFactory {
 		}
 	}
 
-	public MethodMetadata createMethod(ClassMetadata aClass, String aMethodName, ArrayList<String> anArgs, String aReturnType, MethodMetrics aMetrics) {
-		MethodMetadata method = new MethodMetadata(idGenerator++, aMethodName, anArgs, aReturnType, aMetrics);
+	public MethodMetadata createMethod(ClassMetadata aClass, String aMethodName, ArrayList<String> anArgs, String aReturnType, boolean isAbstract, MethodMetrics aMetrics) {
+		MethodMetadata method = new MethodMetadata(idGenerator++, aMethodName, anArgs, aReturnType, isAbstract, aMetrics);
 		aClass.addMethod(method);
 		return method;
 	}
@@ -208,6 +208,9 @@ public class MetadataFactory {
 		return constructor;
 	}
 	
+	public ComponentMetadata createComponent(String aQualifiedClassName) {
+		return new ComponentMetadata(idGenerator++, getClass(aQualifiedClassName));
+	}
 	private ArrayList<String> nameToArray(Name aName) {
 		ArrayList<String> rslt = new ArrayList<String>();
 		nameToArrayHelper(aName, rslt);

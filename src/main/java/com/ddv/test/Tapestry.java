@@ -2,6 +2,7 @@ package com.ddv.test;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
@@ -16,6 +17,9 @@ import javax.xml.parsers.DocumentBuilderFactory;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
+import org.xml.sax.EntityResolver;
+import org.xml.sax.InputSource;
+import org.xml.sax.SAXException;
 
 import com.ddv.test.entity.ClassMetadata;
 import com.ddv.test.entity.ComponentMetadata;
@@ -25,7 +29,7 @@ import com.github.javaparser.ast.expr.Name;
 
 public class Tapestry {
 
-	private static final ComponentMetadata DEFAULT_TAPESTRY_COMPONENT = new ComponentMetadata(null); 
+	private static final ComponentMetadata DEFAULT_TAPESTRY_COMPONENT = new ComponentMetadata(-1, null); 
 	
 	private DocumentBuilderFactory factory;
 	private HashMap<String, HashMap<String, String>> prefixToComponentNameToQualifiedClassNameMap = new HashMap<String, HashMap<String, String>>();
@@ -43,7 +47,7 @@ public class Tapestry {
 		HashMap<String, String> componentNameToQualifiedClassNameMap = new HashMap<String, String>();
 		prefixToComponentNameToQualifiedClassNameMap.put(aPrefix, componentNameToQualifiedClassNameMap);
 
-		DocumentBuilder builder = factory.newDocumentBuilder();
+		DocumentBuilder builder = createDocumentBuilder();
 		try (FileInputStream in = new FileInputStream(aFileFullPath)) {
 			Document document = builder.parse(in);
 			Element librarySpecificationElem = document.getDocumentElement();
@@ -64,14 +68,29 @@ public class Tapestry {
 		for (Map.Entry<String, HashMap<String, String>> rootEntry : prefixToComponentNameToQualifiedClassNameMap.entrySet()) {
 			for (Map.Entry<String, String> entry : rootEntry.getValue().entrySet()) {
 				String qualifiedClassName = entry.getValue();
-				ComponentMetadata metadata = new ComponentMetadata(aMetadataFactory.getClass(qualifiedClassName));
+				ComponentMetadata metadata = aMetadataFactory.createComponent(qualifiedClassName);
 				qualifiedClassNameToComponentMetadataMap.put(qualifiedClassName, metadata);
 			}
 		}
 	}
 	
-	private String parseJwcFile(Path aJwcFile) throws Exception {
+	private DocumentBuilder createDocumentBuilder() throws Exception {
 		DocumentBuilder builder = factory.newDocumentBuilder();
+		builder.setEntityResolver(new EntityResolver() {
+			@Override
+			public InputSource resolveEntity(String aPublicId, String aSystemId) throws SAXException, IOException {
+				if (aSystemId.contains("Tapestry_4_0.dtd")) {
+					return new InputSource(CodeAnalyzer.class.getResourceAsStream("Tapestry_4_0.dtd"));
+				} else {
+					return null;
+				}
+			}
+		});
+		return builder;
+	}
+	
+	private String parseJwcFile(Path aJwcFile) throws Exception {
+		DocumentBuilder builder = createDocumentBuilder();
 		try (FileInputStream in = new FileInputStream(aJwcFile.toFile())) {
 			Document document = builder.parse(in);
 			Element componentSpecificationElem = document.getDocumentElement();
@@ -89,36 +108,40 @@ public class Tapestry {
 	}
 	
 	public ComponentMetadata resolveComponentName(ClassMetadata aContext, String aComponentName) {
-		String[] parts = aComponentName.split(":");
-		String prefix = null; String componentName = null;
-		if (parts.length==2) {
-			// Case : component name has prefix
-			prefix = parts[0];
-			componentName = parts[1];
-		} else {
-			// Case : component name has no prefix
-			prefix = findComponentPrefix(aContext.getClassFullName());
-			componentName = aComponentName;
-		}
-		
-		if (prefix==null) {
-			// Case : must be a Tapestry component
-			return DEFAULT_TAPESTRY_COMPONENT;
-		} else {
-			// Case : custom Tapestry component
-			HashMap<String, String> componentNameToQualifiedClassNameMap = prefixToComponentNameToQualifiedClassNameMap.get(prefix);
-			if (componentNameToQualifiedClassNameMap!=null) {
-				String qualifiedClassName = componentNameToQualifiedClassNameMap.get(componentName);
-				if (qualifiedClassName!=null) {
-					ComponentMetadata rslt = qualifiedClassNameToComponentMetadataMap.get(qualifiedClassName);
-					if (rslt!=null) {
-						return rslt;
-					}
-				}
-				throw new UnknownObjectException("Class '" + aContext.getClassFullName() + "' references an unknown Tapestry library component (prefix=" + prefix + ", name=" + componentName + ")");
+		if (aComponentName!=null) {
+			String[] parts = aComponentName.split(":");
+			String prefix = null; String componentName = null;
+			if (parts.length==2) {
+				// Case : component name has prefix
+				prefix = parts[0];
+				componentName = parts[1];
 			} else {
-				throw new UnknownObjectException("Tapestry library prefix '" + prefix + "' used in class '" + aContext.getClassFullName() + "' is unknown");
+				// Case : component name has no prefix
+				prefix = findComponentPrefix(aContext.getClassFullName());
+				componentName = aComponentName;
 			}
+			
+			if (prefix==null) {
+				// Case : must be a Tapestry component
+				return DEFAULT_TAPESTRY_COMPONENT;
+			} else {
+				// Case : custom Tapestry component
+				HashMap<String, String> componentNameToQualifiedClassNameMap = prefixToComponentNameToQualifiedClassNameMap.get(prefix);
+				if (componentNameToQualifiedClassNameMap!=null) {
+					String qualifiedClassName = componentNameToQualifiedClassNameMap.get(componentName);
+					if (qualifiedClassName!=null) {
+						ComponentMetadata rslt = qualifiedClassNameToComponentMetadataMap.get(qualifiedClassName);
+						if (rslt!=null) {
+							return rslt;
+						}
+					}
+					throw new UnknownObjectException("Class '" + aContext.getClassFullName() + "' references an unknown Tapestry library component (prefix=" + prefix + ", name=" + componentName + ")");
+				} else {
+					throw new UnknownObjectException("Tapestry library prefix '" + prefix + "' used in class '" + aContext.getClassFullName() + "' is unknown");
+				}
+			}
+		} else {
+			return null;
 		}
 	}
 	

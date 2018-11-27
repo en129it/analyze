@@ -5,7 +5,7 @@ public class SQLInsertBuilder {
 	private StringBuilder sql;
 	private boolean isFirst = true;
 	private boolean isClosed = false;
-	
+
 	public SQLInsertBuilder(StringBuilder anOut, String aTableName, String... aColumns) {
 		sql = anOut;
 		

@@ -11,25 +11,26 @@ public class MethodMetadata implements IMetadata {
 
 	private int id;
 	private String name;
+	private boolean isAbstract;
 	private ArrayList<String> methodArgs;
 	private String methodReturnType;
 	private MethodMetrics metrics;
 	private String componentAnnotationValue;
+	private boolean isComponentAnnotationValueType;
 	private ComponentMetadata componentMetadata;
 	
-	public MethodMetadata(int anId, String aName, ArrayList<String> aMethodArgs, String aMethodReturnType, MethodMetrics aMetrics) {
+	public MethodMetadata(int anId, String aName, ArrayList<String> aMethodArgs, String aMethodReturnType, boolean aIsAbstract, MethodMetrics aMetrics) {
 		id = anId;
 		name = aName;
 		methodArgs = aMethodArgs;
 		methodReturnType = aMethodReturnType;
 		metrics = aMetrics;
+		isAbstract = aIsAbstract;
 	}
 	
-	public void setComponentAnnotationValue(String aValue) {
+	public void setComponentAnnotationValue(String aValue, boolean isType) {
 		componentAnnotationValue = aValue;
-	}
-	public String getComponentAnnotationValue() {
-		return componentAnnotationValue;
+		isComponentAnnotationValueType = isType;
 	}
 	
 	public ComponentMetadata getComponentMetadata() {
@@ -50,8 +51,24 @@ public class MethodMetadata implements IMetadata {
 		return metrics.branchCount;
 	}
 
+	public String getMethodName() {
+		return name;
+	}
+	
+	public boolean isAbstract() {
+		return isAbstract;
+	}
+	
 	public void postProcessComponents(ClassMetadata aContext, Tapestry aTapestry, MetadataFactory aMetadataFactory) {
-		componentMetadata = aTapestry.resolveComponentName(aContext, componentAnnotationValue);
+		String componentName = this.resolveComponentName(aContext);
+		componentMetadata = aTapestry.resolveComponentName(aContext, componentName);
+	}
+	
+	public String resolveComponentName(ClassMetadata aContext) {
+		if (componentAnnotationValue!=null) {
+			return (isComponentAnnotationValueType) ? componentAnnotationValue : aContext.resolveComponentCopyOf(componentAnnotationValue);
+		}
+		return null;
 	}
 	
 	@Override
