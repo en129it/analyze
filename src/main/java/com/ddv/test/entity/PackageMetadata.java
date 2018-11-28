@@ -94,14 +94,6 @@ public class PackageMetadata implements IMetadata {
 		return "Package " + getPackageFullName();
 	}
 
-	//**** IMetadata implementation ********************************************
-	
-	@Override
-	public int getId() {
-		return id;
-	}
-
-	@Override
 	public String generateSQLInsert() {
 		StringBuilder rslt = new StringBuilder();
 		new SQLInsertBuilder(rslt, "PACKAGE", "ID", "NAME", "FULL_NAME")
@@ -110,6 +102,13 @@ public class PackageMetadata implements IMetadata {
 		.addString(getPackageFullName())
 		.flush();
 		return rslt.toString();
+	}
+
+	//**** IMetadata implementation ********************************************
+	
+	@Override
+	public int getId() {
+		return id;
 	}
 	
 }

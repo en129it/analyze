@@ -65,6 +65,7 @@ public class MetadataFactory {
 		}
 		
 		for (ClassMetadata classMetadata : classes) {
+			classMetadata.resolveDirectReferencedComponentCount();
 			classMetadata.resolveReferencedComponentCount();
 		}
 	}
@@ -158,7 +159,7 @@ public class MetadataFactory {
 				return classMetadata;
 			}
 		}
-		throw new UnknownObjectException("Unable to find class '" + aPackage.getPackageFullName() + "." + aClassName + "'");
+		throw new UnknownObjectException("Unable to find class '" + ((aPackage!=null) ? (aPackage.getPackageFullName() + ".") : "") + aClassName + "'");
 	}
 	
 	public PackageMetadata createPackage(Name aName) {
@@ -226,7 +227,7 @@ public class MetadataFactory {
 		}
 	}
 
-	public void generateSQL(String anOutFileName) throws IOException {
+	public void generateSQL(String anOutFileName, boolean mustOutputClassMethods) throws IOException {
 		try (BufferedWriter out = new BufferedWriter(new FileWriter(new File(anOutFileName)))) {
 			for (PackageMetadata packageMetadata : packages) {
 				packageMetadata.walkTree( (PackageMetadata metadata) -> {
@@ -238,6 +239,14 @@ public class MetadataFactory {
 			}
 			for (ClassMetadata classMetadata : classes) {
 				out.write(classMetadata.generateSQLInsert());
+			}
+
+			out.write(tapestry.generateSQLInsert());
+			
+			if (mustOutputClassMethods) {
+				for (ClassMetadata classMetadata : classes) {
+					out.write(classMetadata.generateSQLMethodInsert());
+				}
 			}
 		}
 	}

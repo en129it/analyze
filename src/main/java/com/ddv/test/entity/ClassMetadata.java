@@ -28,6 +28,7 @@ public class ClassMetadata implements IMetadata {
 	private ArrayList<String> genericTypes;
 	private boolean isEntityBean;
 	private Integer referencedComponentCount;
+	private Integer directReferencedComponentCount;
 	
 	public ClassMetadata(int anId, String aName, PackageMetadata aPackage) {
 		id = anId;
@@ -139,24 +140,6 @@ public class ClassMetadata implements IMetadata {
 		return rslt;
 	}
 	
-	public int getDeclaredComponentCount() {
-		int rslt = 0;
-		for (MethodMetadata method : methods) {
-			if (method.getComponentMetadata()!=null) {
-				rslt++;
-			}
-		}
-		return rslt;
-	}
-	
-	public int getComponentCount() {
-		int rslt = getDeclaredComponentCount();
-		if (extendedClass!=null) {
-			rslt += extendedClass.getComponentCount();
-		}
-		return rslt;
-	}
-	
 	public String getClassFullName() {
 		return ((packageMetaData!=null) ? (packageMetaData.getPackageFullName() + ".") : "") + name;
 	}
@@ -186,11 +169,31 @@ public class ClassMetadata implements IMetadata {
 		return null;
 	}
 	
-	public int resolveReferencedComponentCount() {
-		if (referencedComponentCount==null) {
+	public int resolveDirectReferencedComponentCount() {
+		if (directReferencedComponentCount==null) {
 			int rslt = 0;
 			for (MethodMetadata methodMetadata : methods) {
-				rslt += methodMetadata.getComponentMetadata().resolveReferencedComponentCount();
+				if (methodMetadata.getComponentMetadata()!=null) {
+					rslt++;
+				}
+			}
+			if (extendedClass!=null) {
+				rslt =+ extendedClass.resolveDirectReferencedComponentCount();
+			}
+			directReferencedComponentCount = rslt;
+		}
+		return directReferencedComponentCount.intValue();
+	}
+	
+	public int resolveReferencedComponentCount() {
+		if (referencedComponentCount==null) {
+			int rslt = 0; ComponentMetadata componentMetadata = null;
+			for (MethodMetadata methodMetadata : methods) {
+				componentMetadata = methodMetadata.getComponentMetadata();
+				if (componentMetadata!=null) {
+					rslt++;
+					rslt += componentMetadata.resolveReferencedComponentCount();
+				}
 			}
 			if (extendedClass!=null) {
 				rslt =+ extendedClass.resolveReferencedComponentCount();
@@ -236,25 +239,17 @@ public class ClassMetadata implements IMetadata {
 		return rslt;
 	}
 
-	//**** IMetadata implementation ********************************************
-	
-	@Override
-	public int getId() {
-		return id;
-	}
-
-	@Override
 	public String generateSQLInsert() {
 		StringBuilder rslt = new StringBuilder();
 		
-		new SQLInsertBuilder(rslt, "CLASS", "ID", "NAME", "FULL_PCK_NAME", "DECLARED_INSTRUCTION_COUNT", "INSTRUCTION_COUNT", "DECLARED_COMPONENT_COUNT", "COMPONENT_COUNT", "IS_STATIC", "IS_ABSTRACT", "IS_ENUM")
+		new SQLInsertBuilder(rslt, "CLASS", "ID", "NAME", "FULL_PCK_NAME", "DECLARED_INSTRUCTION_COUNT", "INSTRUCTION_COUNT", "DEEP_COMPONENT_COUNT", "COMPONENT_COUNT", "IS_STATIC", "IS_ABSTRACT", "IS_ENUM")
 			.addNumber(id)
 			.addString(name)
 			.addString(packageMetaData.getPackageFullName())
 			.addNumber(getDeclaredInstructionCount())
 			.addNumber(getInstructionCount())
-			.addNumber(getDeclaredComponentCount())
-			.addNumber(getComponentCount())
+			.addNumber(referencedComponentCount)
+			.addNumber(directReferencedComponentCount)
 			.addBoolean(isStatic)
 			.addBoolean(isAbstract)
 			.addBoolean(isEnum)
@@ -283,7 +278,13 @@ public class ClassMetadata implements IMetadata {
 					.flush();
 			}
 		}
+		
+		return rslt.toString();
+	}
 
+	public String generateSQLMethodInsert() {
+		StringBuilder rslt = new StringBuilder();
+		
 		for (ConstructorMetadata constructor: constructors) {
 			new SQLInsertBuilder(rslt, "CONSTRUCTOR", "ID", "CLASS_ID", "SIGNATURE", "DECLARED_INSTRUCTION_COUNT")
 			.addNumber(constructor.getId())
@@ -314,4 +315,12 @@ public class ClassMetadata implements IMetadata {
 		
 		return rslt.toString();
 	}
+	
+	//**** IMetadata implementation ********************************************
+	
+	@Override
+	public int getId() {
+		return id;
+	}
+	
 }

@@ -41,10 +41,5 @@ public class ConstructorMetadata implements IMetadata {
 	public int getId() {
 		return id;
 	}
-
-	@Override
-	public String generateSQLInsert() {
-		return null;
-	}
 	
 }

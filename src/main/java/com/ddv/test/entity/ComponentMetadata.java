@@ -1,6 +1,8 @@
 package com.ddv.test.entity;
 
-public class ComponentMetadata {
+import com.ddv.test.SQLInsertBuilder;
+
+public class ComponentMetadata implements IMetadata {
 
 	private int id;
 	private ClassMetadata classMetadata;
@@ -9,10 +11,9 @@ public class ComponentMetadata {
 	public ComponentMetadata(int anId, ClassMetadata aClass) {
 		id = anId;
 		classMetadata = aClass;
-	}
-
-	public int getId() {
-		return id;
+		if (classMetadata==null) {
+			referencedComponentCount = 0;
+		}
 	}
 	
 	public int resolveReferencedComponentCount() {
@@ -20,5 +21,23 @@ public class ComponentMetadata {
 			referencedComponentCount = classMetadata.resolveReferencedComponentCount();
 		}
 		return referencedComponentCount.intValue();
+	}
+
+	public String generateSQLInsert() {
+		StringBuilder rslt = new StringBuilder();
+
+		SQLInsertBuilder builder = (classMetadata!=null) ? new SQLInsertBuilder(rslt, "COMPONENT", "ID", "CLASS_ID") : new SQLInsertBuilder(rslt, "COMPONENT", "ID");
+		builder.addNumber(id);
+		if (classMetadata!=null) {
+			builder.addNumber(classMetadata.getId());
+		}
+		builder.flush();
+		
+		return rslt.toString();
+	}
+	
+	@Override
+	public int getId() {
+		return id;
 	}
 }

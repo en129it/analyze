@@ -2,9 +2,11 @@ package com.ddv.test;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Function;
@@ -29,7 +31,8 @@ import com.github.javaparser.ast.expr.Name;
 
 public class Tapestry {
 
-	private static final ComponentMetadata DEFAULT_TAPESTRY_COMPONENT = new ComponentMetadata(-1, null); 
+	private static final ComponentMetadata DEFAULT_TAPESTRY_COMPONENT = new ComponentMetadata(-1, null);
+	private static final String DEFAULT_TAPESTRY_CLASS_NAME = "DEFAULT_TAPESTRY_CLASS_NAME";
 	
 	private DocumentBuilderFactory factory;
 	private HashMap<String, HashMap<String, String>> prefixToComponentNameToQualifiedClassNameMap = new HashMap<String, HashMap<String, String>>();
@@ -41,7 +44,7 @@ public class Tapestry {
 		factory.setValidating(false);
 	}
 
-	public void addContribLibrary(String aPrefix, String aFileFullPath) throws Exception {
+	public void addContribLibrary(String aPrefix, String aFileFullPath, ArrayList<Path> aJwcFiles) throws Exception {
 		Path contribLibContainerFolder = Paths.get(aFileFullPath).getParent();
 		
 		HashMap<String, String> componentNameToQualifiedClassNameMap = new HashMap<String, String>();
@@ -57,10 +60,33 @@ public class Tapestry {
 			for (int i=0; i<size; i++) {
 				Element componentTypeElem = (Element)componentTypeElems.item(i);
 				
+				String type = componentTypeElem.getAttribute("type");
 				String specificationPath = componentTypeElem.getAttribute("specification-path");
-				String componentQualifiedClassName = parseJwcFile(contribLibContainerFolder.resolve(specificationPath));
-				componentNameToQualifiedClassNameMap.put(componentTypeElem.getAttribute("type"), componentQualifiedClassName);
+				Path filePath = contribLibContainerFolder.resolve(specificationPath);
+				
+				aJwcFiles.remove(filePath);
+				
+				try {
+					String componentQualifiedClassName = parseJwcFile(filePath);
+					componentNameToQualifiedClassNameMap.put(type, componentQualifiedClassName);
+				} catch (FileNotFoundException ex) {
+					String fileName = filePath.toFile().getAbsolutePath();
+					if (fileName.contains("org\\apache\\tapestry") || fileName.contains("org/apache/tapestry")) {
+						componentNameToQualifiedClassNameMap.put(type, DEFAULT_TAPESTRY_CLASS_NAME);
+					} else {
+						System.err.println("Failed to find JWC file associated with component '" + aPrefix + ":" + type +"'");
+					}
+				}
 			}
+		}
+		
+		// Process the remaining JWC files that were not referenced in the aFileFullPath file
+		for (Path jwcFile : aJwcFiles) {
+			String fileName = jwcFile.getFileName().toString();
+			String componentName = fileName.substring(0,  fileName.indexOf('.'));
+			
+			String componentQualifiedClassName = parseJwcFile(jwcFile);
+			componentNameToQualifiedClassNameMap.put(componentName, componentQualifiedClassName);
 		}
 	}
 	
@@ -143,6 +169,14 @@ public class Tapestry {
 		} else {
 			return null;
 		}
+	}
+	
+	public String generateSQLInsert() {
+		StringBuilder builder = new StringBuilder();
+		for (ComponentMetadata componentMetadata : qualifiedClassNameToComponentMetadataMap.values()) {
+			builder.append(componentMetadata.generateSQLInsert());
+		}
+		return builder.toString();
 	}
 	
 	private Name splitSpecificationPath(String aPath) {

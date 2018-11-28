@@ -82,10 +82,5 @@ public class MethodMetadata implements IMetadata {
 	public int getId() {
 		return id;
 	}
-
-	@Override
-	public String generateSQLInsert() {
-		return null;
-	}
 	
 }

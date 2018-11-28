@@ -43,39 +43,54 @@ public class CodeAnalyzer {
         }
 	}
 	
-	private ArrayList<Path> findJavaFiles(String[] aSourceFolders) throws Exception {
-		ArrayList<Path> rslt = new ArrayList<Path>();
-		
+	private void findJavaAndJwcFiles(String[] aSourceFolders, ArrayList<Path> aJavaFiles, ArrayList<Path> aJwcFiles) throws Exception {
 		for (String sourceFolder : aSourceFolders) {
 			Path sourcePath = Paths.get(sourceFolder);
-			rslt.addAll(Files.walk(sourcePath, FileVisitOption.FOLLOW_LINKS)
-				.filter( (Path aPath) -> {
-					return Files.isRegularFile(aPath)
-						&& aPath.toFile().getName().endsWith(".java");
-				}).collect(Collectors.toList())
-			);
+			Files.walk(sourcePath, FileVisitOption.FOLLOW_LINKS).forEach( (Path aPath) -> {
+				if (Files.isRegularFile(aPath) && (!isTestFile(aPath))) {
+					String fileName = aPath.toFile().getName();
+					if (fileName.endsWith(".java")) {
+						aJavaFiles.add(aPath);
+					} else if (fileName.endsWith(".jwc")) {
+						aJwcFiles.add(aPath);
+					}
+				}
+			});
 		}
-		
-		return rslt;
+	}
+	
+	private static boolean isTestFile(Path aPath) {
+		int count = aPath.getNameCount();
+		for (int i=0; i<count; i++) {
+			if (aPath.getName(i).toString().equals("test")) {
+				return true;
+			}
+		}
+		return false;
 	}
 	
 	public static void main(String[] args) throws Exception {
 		if (args.length<3) {
-			System.out.println("Usage: CodeAnalyzer <contrib file> <out file> [<folders to analyze>]");
+			System.out.println("Usage: CodeAnalyzer <contrib file> <out file> <out methods (Y,N)> [<folders to analyze>]");
 		} else {
 			String contribFile = args[0];
 			String outFile = args[1];
+			boolean mustOutputClassMethods = "Y".equals(args[2]);
 			
-			String[] foldersToAnalyze = new String[args.length-2];
-			System.arraycopy(args, 2, foldersToAnalyze, 0, foldersToAnalyze.length);
+			String[] foldersToAnalyze = new String[args.length-3];
+			System.arraycopy(args, 3, foldersToAnalyze, 0, foldersToAnalyze.length);
 
+			CodeAnalyzer t = new CodeAnalyzer();
+			ArrayList<Path> javaFiles = new ArrayList<Path>();
+			ArrayList<Path> jwcFiles = new ArrayList<Path>();
+			t.findJavaAndJwcFiles(foldersToAnalyze, javaFiles, jwcFiles);
+			
 			System.out.println("Start parsing contrib library file...");
 			Tapestry tapestry = new Tapestry();
-			tapestry.addContribLibrary("RDIS", contribFile);
+			tapestry.addContribLibrary("RDIS", contribFile, jwcFiles);
+			jwcFiles.clear();
 			System.out.println("Contrib library file parsing done");
 			
-			CodeAnalyzer t = new CodeAnalyzer();
-			ArrayList<Path> javaFiles = t.findJavaFiles(foldersToAnalyze);
 			int javaFileCount = javaFiles.size();
 			System.out.println(String.format("Start analyzing %d Java files...", javaFileCount));
 			MetadataFactory factory = new MetadataFactory(javaFiles, tapestry);
@@ -95,7 +110,7 @@ public class CodeAnalyzer {
 			System.out.println("Analysis done. Start post processing...");
 			factory.postProcess();
 			System.out.println("Post processing done. Saving results to " + outFile);
-			factory.generateSQL(outFile);
+			factory.generateSQL(outFile, mustOutputClassMethods);
 			//factory.printOutClasses();
 		}
 	}
