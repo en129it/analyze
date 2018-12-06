@@ -1,0 +1,34 @@
+select a.* 
+from class a, package b 
+where a.full_pck_name = b.full_name 
+and ((b.classification = 'REPORT') or (lower(a.name) like '%report%')); 
+
+select a.* 
+from class a, package b 
+where a.full_pck_name = b.full_name 
+and ((b.classification = 'TXN') or (lower(a.name) like '%transaction%'));
+
+select a.* 
+from class a, package b 
+where a.full_pck_name = b.full_name 
+and (
+(b.classification = 'ACCOUNT') 
+or (
+(lower(a.name) like '%account%') 
+and (not(lower(a.name) like '%report%'))
+and (not(lower(a.name) like '%transaction%'))
+)
+);
+
+select a.* 
+from class a, package b 
+where a.full_pck_name = b.full_name 
+and (
+(b.classification = 'SHARED') 
+and (
+(not(lower(a.name) like '%account%')) 
+and (not(lower(a.name) like '%report%'))
+and (not(lower(a.name) like '%transaction%'))
+)
+);
+
